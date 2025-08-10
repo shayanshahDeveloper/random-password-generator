@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Password Generator</title>
+    <style>
+      :root {
+        --bg: #0f1724;
+        --card: #0b1220;
+        --accent: #7c5cff;
+        --muted: #9aa4b2;
+        --white: #e6eef6;
+      }
+      body {
+        font-family: Inter, system-ui, Segoe UI, Roboto, Arial;
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(180deg, #071029, #0b1220);
+        color: var(--white);
+      }
+      .card {
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.02),
+          rgba(255, 255, 255, 0.01)
+        );
+        border-radius: 12px;
+        padding: 20px;
+        width: 420px;
+        box-shadow: 0 8px 30px rgba(2, 6, 23, 0.7);
+      }
+      h1 {
+        margin: 0 0 12px 0;
+        font-size: 18px;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin: 8px 0;
+      }
+      label {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      input[type="number"] {
+        width: 84px;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        background: transparent;
+        color: var(--white);
+      }
+      .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .checkbox-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .out {
+        background: rgba(255, 255, 255, 0.03);
+        padding: 12px;
+        border-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      button {
+        background: var(--accent);
+        border: 0;
+        padding: 8px 12px;
+        border-radius: 8px;
+        color: #fff;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      button.secondary {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .hint {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+      .strength {
+        font-weight: 700;
+      }
+      .copy-btn {
+        margin-left: 8px;
+        padding: 6px 8px;
+        border-radius: 6px;
+      }
+      footer {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 12px;
+        text-align: center;
+      }
+      @media (max-width: 480px) {
+        .card {
+          width: 92vw;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card" role="main">
+      <h1>Secure Password Generator</h1>
+
+      <div class="out" aria-live="polite">
+        <code
+          id="password"
+          style="word-break: break-all; font-size: 14px"
+        ></code>
+        <div>
+          <button id="copy" class="copy-btn secondary">Copy</button>
+        </div>
+      </div>
+
+      <div class="row" style="justify-content: space-between; margin-top: 12px">
+        <label>
+          Length
+          <input id="length" type="number" min="4" max="128" value="16" />
+        </label>
+        <div style="display: flex; gap: 8px">
+          <button id="generate">Generate</button>
+          <button id="randomizeCharset" class="secondary">
+            Randomize Charset
+          </button>
+        </div>
+      </div>
+
+      <div class="controls" role="region" aria-label="Options">
+        <div class="checkbox-row">
+          <input id="lower" type="checkbox" checked />
+          <label for="lower">Include lowercase (a-z)</label>
+        </div>
+        <div class="checkbox-row">
+          <input id="upper" type="checkbox" checked />
+          <label for="upper">Include UPPERCASE (A-Z)</label>
+        </div>
+        <div class="checkbox-row">
+          <input id="numbers" type="checkbox" checked />
+          <label for="numbers">Include numbers (0-9)</label>
+        </div>
+        <div class="checkbox-row">
+          <input id="symbols" type="checkbox" checked />
+          <label for="symbols">Include symbols (!@#$...)</label>
+        </div>
+      </div>
+
+      <p class="hint">
+        Strength: <span id="strength" class="strength">—</span>
+      </p>
+      <footer>Developer <code>Shayan Shah</code> — All right reserved</footer>
+    </main>
+
+    <script>
+      // Character sets
+      const SETS = {
+        lower: "abcdefghijklmnopqrstuvwxyz",
+        upper: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        numbers: "0123456789",
+        symbols: "!@#$%^&*()-_=+[]{};:,.<>?/|~",
+      };
+
+      // DOM
+      const passwordEl = document.getElementById("password");
+      const lengthEl = document.getElementById("length");
+      const lowerEl = document.getElementById("lower");
+      const upperEl = document.getElementById("upper");
+      const numbersEl = document.getElementById("numbers");
+      const symbolsEl = document.getElementById("symbols");
+      const genBtn = document.getElementById("generate");
+      const copyBtn = document.getElementById("copy");
+      const strengthEl = document.getElementById("strength");
+      const randomizeBtn = document.getElementById("randomizeCharset");
+
+      // Secure random integer function using crypto
+      function secureRandomInt(max) {
+        // returns integer in [0, max)
+        const maxUint32 = 0xffffffff;
+        const exp = Math.ceil(Math.log2(max));
+        const bytes = Math.ceil(exp / 8);
+        const limit = Math.floor((maxUint32 + 1) / max) * max; // rejection sampling threshold
+        const arr = new Uint32Array(1);
+
+        while (true) {
+          crypto.getRandomValues(arr);
+          const rand = arr[0] >>> 0;
+          if (rand < limit) {
+            return rand % max;
+          }
+        }
+      }
+
+      // Shuffle String (Fisher–Yates)
+      function shuffleArray(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = secureRandomInt(i + 1);
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+
+      // Build charset from checkboxes
+      function buildCharset() {
+        let charset = "";
+        if (lowerEl.checked) charset += SETS.lower;
+        if (upperEl.checked) charset += SETS.upper;
+        if (numbersEl.checked) charset += SETS.numbers;
+        if (symbolsEl.checked) charset += SETS.symbols;
+        return charset;
+      }
+
+      // Generate password securely
+      function generatePassword(length) {
+        const charset = buildCharset();
+        if (!charset) return "";
+
+        // Ensure at least one character from each selected category for stronger passwords
+        const required = [];
+        if (lowerEl.checked) required.push(SETS.lower);
+        if (upperEl.checked) required.push(SETS.upper);
+        if (numbersEl.checked) required.push(SETS.numbers);
+        if (symbolsEl.checked) required.push(SETS.symbols);
+
+        const out = [];
+
+        // Add one required char from each selected set (if length permits)
+        for (const set of required) {
+          if (out.length < length) {
+            const idx = secureRandomInt(set.length);
+            out.push(set[idx]);
+          }
+        }
+
+        // Fill remaining
+        for (let i = out.length; i < length; i++) {
+          const idx = secureRandomInt(charset.length);
+          out.push(charset[idx]);
+        }
+
+        // Shuffle to avoid predictable required-char positions
+        return shuffleArray(out).join("");
+      }
+
+      // Estimate strength simply by entropy bits = length * log2(charset size)
+      function estimateStrength(pw) {
+        const charset = new Set();
+        for (const ch of pw) {
+          if (SETS.lower.includes(ch)) charset.add("l");
+          else if (SETS.upper.includes(ch)) charset.add("U");
+          else if (SETS.numbers.includes(ch)) charset.add("0");
+          else if (SETS.symbols.includes(ch)) charset.add("#");
+          else charset.add("?");
+        }
+
+        // approximate charset size by presence
+        let size = 0;
+        if (pw.length === 0) return { score: "—", bits: 0 };
+        if ([...pw].some((c) => SETS.lower.includes(c)))
+          size += SETS.lower.length;
+        if ([...pw].some((c) => SETS.upper.includes(c)))
+          size += SETS.upper.length;
+        if ([...pw].some((c) => SETS.numbers.includes(c)))
+          size += SETS.numbers.length;
+        if ([...pw].some((c) => SETS.symbols.includes(c)))
+          size += SETS.symbols.length;
+        if (size === 0) size = 26; // fallback
+
+        const bits = Math.round(pw.length * Math.log2(size));
+        let score = "Weak";
+        if (bits >= 128) score = "Very strong";
+        else if (bits >= 80) score = "Strong";
+        else if (bits >= 50) score = "Moderate";
+        else score = "Weak";
+        return { score, bits };
+      }
+
+      // UI actions
+      function updateUIWithPassword(pw) {
+        passwordEl.textContent = pw || "—";
+        const { score, bits } = estimateStrength(pw);
+        strengthEl.textContent = `${score} (${bits} bits)`;
+      }
+
+      genBtn.addEventListener("click", () => {
+        const length = Math.max(4, Math.min(128, Number(lengthEl.value) || 16));
+        lengthEl.value = length;
+        const pw = generatePassword(length);
+        updateUIWithPassword(pw);
+
+        // Auto select visually for copy convenience
+        navigator.clipboard && copyBtn.classList.remove("secondary");
+      });
+
+      copyBtn.addEventListener("click", async () => {
+        const pw = passwordEl.textContent;
+        if (!pw || pw === "—") return;
+        try {
+          await navigator.clipboard.writeText(pw);
+          copyBtn.textContent = "Copied ✔";
+          setTimeout(() => (copyBtn.textContent = "Copy"), 1400);
+        } catch (err) {
+          // fallback: create temporary textarea
+          const ta = document.createElement("textarea");
+          ta.value = pw;
+          document.body.appendChild(ta);
+          ta.select();
+          try {
+            document.execCommand("copy");
+            copyBtn.textContent = "Copied ✔";
+          } finally {
+            ta.remove();
+            setTimeout(() => (copyBtn.textContent = "Copy"), 1400);
+          }
+        }
+      });
+
+      // Randomize which character sets are active (fun utility)
+      randomizeBtn.addEventListener("click", () => {
+        lowerEl.checked = Math.random() > 0.2;
+        upperEl.checked = Math.random() > 0.2;
+        numbersEl.checked = Math.random() > 0.3;
+        symbolsEl.checked = Math.random() > 0.6;
+        // ensure at least one checked
+        if (
+          !lowerEl.checked &&
+          !upperEl.checked &&
+          !numbersEl.checked &&
+          !symbolsEl.checked
+        ) {
+          lowerEl.checked = true;
+        }
+      });
+
+      // Generate initial password
+      genBtn.click();
+    </script>
+  </body>
+</html>
